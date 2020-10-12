@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         Soiler blacklistted commets
+// @name         Spoilerlfy blacklistted commets
 // @namespace    https://tjornal.ru/
 // @version      0.1
 // @description  replace hidden comments from block list with comments under spoiler.
-// @author       You
+// @author       mrdimlis
 // @match        https://tjournal.ru/*
 // @connect      https://tjournal.ru
 // @grant        GM_xmlhttpRequest
@@ -18,19 +18,15 @@
     const API_VER = '1.8';
     const API_URL = `https://api.tjournal.ru/v${API_VER}`;
 
-    const APP_NAME = 'DimenteriosFoxTestApp';
+    const APP_NAME = 'TjSpoilerlfyBlacklistedComments';
     const VERSION = "0.1.0";
 
     const HEADERS_NO_AUTH = {
         'User-Agent': `${APP_NAME}-app/${VERSION}`
     };
 
-
     const TESTING_ENTRY_ID = 221782;
     const TESTING_COMMENT_ID = 4263642;
-
-    let comment_ids = new Array(1);
-    comment_ids.fill(TESTING_COMMENT_ID) // actually should be array of different ids
 
 
     /**
