@@ -10,6 +10,7 @@
 // @require      https://raw.githubusercontent.com/mitchellmebane/GM_fetch/master/GM_fetch.min.js
 // ==/UserScript==
 
+
 (function () {
     'use strict';
 
@@ -24,9 +25,6 @@
     const HEADERS_NO_AUTH = {
         'User-Agent': `${APP_NAME}-app/${VERSION}`
     };
-
-    const TESTING_ENTRY_ID = 221782;
-    const TESTING_COMMENT_ID = 4263642;
 
 
     /**
@@ -50,7 +48,7 @@
 
     /**
      * Extact hidden comments from DOM tree
-     * @returns {Array<{id: Number, comment: HTMLElement}>} array of two: id number + comment DOM elem
+     * @returns {Array.<{id: number, comment: HTMLElement}>} array of two: id number + comment DOM elem
      */
     function extract_comments_form_dom() {
         const comment_elems = document.querySelectorAll(".comments__item")
@@ -72,83 +70,108 @@
 
 
     /**
+     * Fetch data by URL and return optional json + responce status
+     * @param {string} request_url API request url
+     * @returns {Promise<{json: ?Object.<string, string>, status: number}>}
+     */
+    async function get_resp_json(request_url) {
+        let resp = await fetch(request_url, { headers: HEADERS_NO_AUTH });
+        if (resp.ok) {
+            return { json: await resp.json(), status: resp.status };
+        }
+        else {
+            return { json: null, status: resp.status };
+        }
+    }
+
+    /**
      * Get comment from entry by id
      * @param {number} entry_id
      * @param {number} comment_id
-     * @param {number} max_retry_count max count of retry to get message. Detault 10.
-     * @returns {string} empty string if comment was not received otherwise html text of comment.
+     * @param {number} max_retry_cnt max count of retry to get message. Detault 10.
+     * @returns {Promise<string>} error string if comment was not received otherwise html text of comment.
     */
-    async function get_comment(entry_id, comment_id, max_retry_count = 10) {
+    async function get_comment(entry_id, comment_id, max_retry_cnt = 10) {
         const request_url = request_comment_url_template(entry_id, comment_id);
         console.log(`Request: ${request_url}.`);
 
-        // Await return respoce obj + Optional[json]
-        let get_resp_json = () => fetch(request_url, { headers: HEADERS_NO_AUTH })
-            .then(resp => {
-                return resp.ok ? resp : Promise.reject([resp, {}]);
-            })
-            .then(response => {
-                return Promise.all([response, response.json()]);
-            }).catch(e => {
-                console.log(`Fatal error: ${e.message}`);
-                return Promise.reject([{}, {}]);
-            });
+        for (let retry_cnt = 0; retry_cnt < max_retry_cnt; retry_cnt++) {
+            try {
+                const result = await get_resp_json(request_url);
 
-        for (let retry_count = 0; retry_count < max_retry_count; retry_count++) {
-            const [first_comment, status] = await get_resp_json()
-                .then(result => {
-                    const [resp, json] = result;
-                    let comment = json.result.items.find((el) => el.id == comment_id);
-                    return [comment, resp.status];
-                })
-                .catch(function (bad_result) {
-                    const [resp, _] = bad_result;
-                    if (!isEmpty(resp)) {
-                        console.log(`Request "${request_url}" failed!`);
-                        return [{}, resp.status];
-                    }
-                    else {
-                        return [{}, {}]
-                    }
-                });
+                if (result.status == 200) {
+                    let thread = result.json.result.items;
+                    let comment = thread.find((el) => el.id == comment_id);
 
-            // Too many requests
-            if (status == 429) {
-                await sleep(1000);
-                console.log(`Retry ${retry_count}: ${request_url}...`)
-                continue;
+                    console.log(`Success "${request_url}"!`)
+
+                    return comment.html;
+                }
+
+                if (result.status == 429) { // too many requests to server
+                    await sleep(1000);
+                    console.log(`Retry ${retry_cnt}: ${request_url}...`)
+                    continue;
+                }
+
+                return Promise.reject(
+                    `Request "${request_url}" was not received! ` +
+                    `Status ${result.status}`)
             }
-            else if (status != 200) {
-                break;
+            catch (error) {
+                return Promise.reject(
+                    `Request "${request_url}" failed! ` +
+                    `Error: ${error.message}`);
             }
-
-            console.log(`Success "${request_url}"!`)
-            return first_comment.html;
         }
-
-        console.log(`Request "${request_url}" was not received!`)
-        return "";
     }
 
-    async function replace_hidden_comment(elem) {
-        let [id, element] = elem;
+    async function replace_hidden_comment(entry_id, comment_elem) {
+        let [id, element] = comment_elem;
 
-        let comment = await get_comment(TESTING_ENTRY_ID, id);
-        console.log(`Replacing comment ${id}...`);
-        if (comment) {
-            let text = element.children[0].querySelector(".comments__item__text");
-            console.log(`Text of ${id}: ${comment}`);
-            text.innerHTML = comment;
+        await get_comment(entry_id, id).then(
+            (comment) => {
+                console.log(`Replacing comment ${id}...`);
+                if (comment) {
+                    let text = element
+                        .children[0]
+                        .querySelector(".comments__item__text");
+
+                    console.log(`Text of ${id}: ${comment}`);
+                    text.innerHTML = comment;
+                }
+            }
+        ).catch((error) => {
+            console.log(
+                `Uups... comment ${id} was not replaced. ` +
+                `Error:\n  ${error}`);
+        });
+    }
+
+    /**
+     * Return current entry id
+     * @returns {?number}
+     */
+    function get_entry_id() {
+        const entry = document.querySelector(".l-entry");
+        if (entry) {
+            return entry.dataset.contentId;
         }
-        else {
-            console.log(`Uups... comment ${id} was not replaced.`);
-        }
+
+        return null;
     }
 
     (async () => {
-        let comments = extract_comments_form_dom();
-        let tasks = comments.map(async (elem) => { return replace_hidden_comment(elem) });
-        await Promise.all(tasks);
+        const entry_id = get_entry_id();
+        if (entry_id) {
+            let comments = extract_comments_form_dom();
+
+            let tasks = comments.map(async (elem) => {
+                return replace_hidden_comment(entry_id, elem);
+            });
+
+            await Promise.all(tasks);
+        }
     })();
 
 })();
