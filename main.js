@@ -47,7 +47,7 @@
      * Extact hidden comments from DOM tree
      * @returns {Array.<{id: number, comment: HTMLElement}>} array of two: id number + comment DOM elem
      */
-    function extract_comments_form_dom() {
+    function extract_comments_from_dom() {
         const comment_elems = document.querySelectorAll(".comments__item")
 
         let hidden_comment_elems = Array.from(comment_elems).filter(element => {
@@ -160,7 +160,7 @@
     (async () => {
         const entry_id = get_entry_id();
         if (entry_id) {
-            let comments = extract_comments_form_dom();
+            let comments = extract_comments_from_dom();
 
             let tasks = comments.map(async (elem) => {
                 return replace_hidden_comment(entry_id, elem);
