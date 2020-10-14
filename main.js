@@ -42,9 +42,6 @@
     */
     const sleep = (t) => ({ then: (r) => setTimeout(r, t) })
 
-    /** Check if empty object */
-    const isEmpty = obj => !Object.values(obj).filter(e => typeof e !== 'undefined').length;
-
 
     /**
      * Extact hidden comments from DOM tree
@@ -67,7 +64,6 @@
 
         return comments;
     }
-
 
     /**
      * Fetch data by URL and return optional json + responce status
